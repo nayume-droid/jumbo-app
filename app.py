@@ -8,6 +8,38 @@ from datetime import datetime
 
 st.set_page_config(page_title="ジャンボマックス浜乃木店 来客分析", layout="wide")
 
+# --- カスタムCSS（タイトル高さの固定によるグラフ位置揃え） ---
+st.markdown("""
+<style>
+    /* 左右カラムのメインタイトルの高さを完全に固定 */
+    .column-header {
+        min-height: 85px;
+        display: flex;
+        align-items: center;
+        border-bottom: 2px solid #e0e0e0;
+        margin-bottom: 15px;
+        padding-bottom: 5px;
+    }
+    .column-header h3 {
+        margin: 0;
+        padding: 0;
+        font-size: 1.2rem;
+        font-weight: 600;
+        line-height: 1.3;
+    }
+    /* グラフ直上の各サブタイトルの高さを固定して、タイトルの行数差によるグラフのズレを完全防止 */
+    .graph-sub-title {
+        min-height: 48px;
+        font-weight: bold;
+        font-size: 1.05rem;
+        margin-top: 10px;
+        margin-bottom: 5px;
+        display: flex;
+        align-items: flex-end;
+    }
+</style>
+""", unsafe_allow_html=True)
+
 st.title("🎰 ジャンボマックス浜乃木店 来店者データ分析アプリ")
 
 # --- 1. Googleスプレッドシート（Web公開CSV）のURL ---
@@ -66,7 +98,7 @@ def load_data(url):
     return df
 
 # 選択された指標に応じた2軸折れ線グラフ描画関数
-def create_selectable_dual_line_chart(df_attr, df_total, group_col, title, x_label, selected_metrics, is_avg=False):
+def create_selectable_dual_line_chart(df_attr, df_total, group_col, x_label, selected_metrics, is_avg=False):
     fig = make_subplots(specs=[[{"secondary_y": True}]])
     
     y_col = "平均客数" if is_avg else "客数"
@@ -100,18 +132,27 @@ def create_selectable_dual_line_chart(df_attr, df_total, group_col, title, x_lab
     y_title_right = "総客数(名/日)" if is_avg else "総客数(名)"
     
     fig.update_layout(
-        title=title,
         hovermode="x unified",
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+        height=380,  # グラフ高さを完全固定
+        margin=dict(l=45, r=45, t=35, b=35),  # 上部マージンを最小固定
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="right",
+            x=1,
+            font=dict(size=10),
+            itemwidth=30
+        )
     )
-    fig.update_xaxes(title_text=x_label)
-    fig.update_yaxes(title_text=y_title_left, secondary_y=False)
-    fig.update_yaxes(title_text=y_title_right, secondary_y=True, showgrid=False)
+    fig.update_xaxes(title_text=x_label, title_font=dict(size=11))
+    fig.update_yaxes(title_text=y_title_left, secondary_y=False, title_font=dict(size=11))
+    fig.update_yaxes(title_text=y_title_right, secondary_y=True, showgrid=False, title_font=dict(size=11))
     
     return fig
 
 # 最高値・最低値の折れ線グラフ描画関数
-def create_selectable_min_max_chart(df_minmax, group_col, title, x_label, selected_metrics):
+def create_selectable_min_max_chart(df_minmax, group_col, x_label, selected_metrics):
     fig = go.Figure()
     
     categories = df_minmax["客層"].unique()
@@ -120,29 +161,38 @@ def create_selectable_min_max_chart(df_minmax, group_col, title, x_label, select
             sub_df = df_minmax[df_minmax["客層"] == cat]
             fig.add_trace(
                 go.Scatter(
-                    x=sub_df[group_col], y=sub_df["最高値"], name=f"{cat} (最高)",
+                    x=sub_df[group_col], y=sub_df["最高値"], name=f"{cat}(高)",
                     mode="lines+markers", line=dict(width=2)
                 )
             )
             fig.add_trace(
                 go.Scatter(
-                    x=sub_df[group_col], y=sub_df["最低値"], name=f"{cat} (最低)",
+                    x=sub_df[group_col], y=sub_df["最低値"], name=f"{cat}(低)",
                     mode="lines+markers", line=dict(width=2, dash="dot")
                 )
             )
         
     fig.update_layout(
-        title=title,
         hovermode="x unified",
-        legend=dict(orientation="h", yanchor="bottom", y=1.02, xanchor="right", x=1)
+        height=380,  # グラフ高さを完全固定
+        margin=dict(l=45, r=45, t=35, b=35),  # 上部マージンを最小固定
+        legend=dict(
+            orientation="h",
+            yanchor="bottom",
+            y=1.02,
+            xanchor="right",
+            x=1,
+            font=dict(size=10),
+            itemwidth=30
+        )
     )
-    fig.update_xaxes(title_text=x_label)
-    fig.update_yaxes(title_text="客数(名)")
+    fig.update_xaxes(title_text=x_label, title_font=dict(size=11))
+    fig.update_yaxes(title_text="客数(名)", title_font=dict(size=11))
     
     return fig
 
 # 分析セクション共通描画関数
-def render_analysis_section(attr_data, total_data, days_per_week, days_per_month, rate_label, selected_metrics, title_suffix=""):
+def render_analysis_section(attr_data, total_data, days_per_week, days_per_month, rate_label, selected_metrics, title_suffix="", key_prefix="default"):
     if not selected_metrics:
         st.warning("サイドバーの「グラフ表示項目の選択」で1つ以上の項目を選択してください。")
         return
@@ -152,15 +202,19 @@ def render_analysis_section(attr_data, total_data, days_per_week, days_per_month
         return
 
     # 1. 日別推移
-    st.markdown(f"#### 1. 日別推移 {title_suffix}")
+    title_1 = f"1. 日別推移 {title_suffix}"
+    st.markdown(f'<div class="graph-sub-title">{title_1}</div>', unsafe_allow_html=True)
+    
     day_attr = attr_data.groupby(["日付_str", "客層"])["客数"].sum().reset_index()
     day_total = total_data.groupby("日付_str")["客数"].sum().reset_index() if total_data is not None and not total_data.empty else None
 
-    fig_day = create_selectable_dual_line_chart(day_attr, day_total, "日付_str", f"{rate_label} 日別客数推移 {title_suffix}", "日付 (YYYY/MM/DD)", selected_metrics, is_avg=False)
-    st.plotly_chart(fig_day, use_container_width=True)
+    fig_day = create_selectable_dual_line_chart(day_attr, day_total, "日付_str", "日付 (YYYY/MM/DD)", selected_metrics, is_avg=False)
+    st.plotly_chart(fig_day, use_container_width=True, key=f"{key_prefix}_fig_day")
 
     # 2. 週別推移
-    st.markdown(f"#### 2. 週別推移（1日あたり平均客数） {title_suffix}")
+    title_2 = f"2. 週別推移（1日あたり平均客数） {title_suffix}"
+    st.markdown(f'<div class="graph-sub-title">{title_2}</div>', unsafe_allow_html=True)
+    
     week_attr = attr_data.groupby(["ISO週開始日", "客層"])["客数"].sum().reset_index()
     week_attr = pd.merge(week_attr, days_per_week, on="ISO週開始日")
     week_attr["平均客数"] = (week_attr["客数"] / week_attr["営業日数"]).round(1)
@@ -171,18 +225,23 @@ def render_analysis_section(attr_data, total_data, days_per_week, days_per_month
         week_total = pd.merge(week_total, days_per_week, on="ISO週開始日")
         week_total["平均客数"] = (week_total["客数"] / week_total["営業日数"]).round(1)
 
-    fig_week = create_selectable_dual_line_chart(week_attr, week_total, "ISO週開始日", f"{rate_label} 週別 1日あたり平均客数推移 {title_suffix}", "週開始日 (YYYY/MM/DD)", selected_metrics, is_avg=True)
-    st.plotly_chart(fig_week, use_container_width=True)
+    fig_week = create_selectable_dual_line_chart(week_attr, week_total, "ISO週開始日", "週開始日 (YYYY/MM/DD)", selected_metrics, is_avg=True)
+    st.plotly_chart(fig_week, use_container_width=True, key=f"{key_prefix}_fig_week")
 
     # 週毎 最高値・最低値
+    title_2_sub = f"週別 各客層の最高値・最低値推移 {title_suffix}"
+    st.markdown(f'<div class="graph-sub-title">{title_2_sub}</div>', unsafe_allow_html=True)
+    
     day_attr_raw = attr_data.groupby(["日付_str", "ISO週開始日", "客層"])["客数"].sum().reset_index()
     week_minmax = day_attr_raw.groupby(["ISO週開始日", "客層"])["客数"].agg(最高値='max', 最低値='min').reset_index()
 
-    fig_week_minmax = create_selectable_min_max_chart(week_minmax, "ISO週開始日", f"{rate_label} 週別 各客層の最高値・最低値推移 {title_suffix}", "週開始日 (YYYY/MM/DD)", selected_metrics)
-    st.plotly_chart(fig_week_minmax, use_container_width=True)
+    fig_week_minmax = create_selectable_min_max_chart(week_minmax, "ISO週開始日", "週開始日 (YYYY/MM/DD)", selected_metrics)
+    st.plotly_chart(fig_week_minmax, use_container_width=True, key=f"{key_prefix}_fig_week_minmax")
 
     # 3. 月別推移
-    st.markdown(f"#### 3. 月別推移（1日あたり平均客数） {title_suffix}")
+    title_3 = f"3. 月別推移（1日あたり平均客数） {title_suffix}"
+    st.markdown(f'<div class="graph-sub-title">{title_3}</div>', unsafe_allow_html=True)
+    
     month_attr = attr_data.groupby(["年月_str", "客層"])["客数"].sum().reset_index()
     month_attr = pd.merge(month_attr, days_per_month, on="年月_str")
     month_attr["平均客数"] = (month_attr["客数"] / month_attr["営業日数"]).round(1)
@@ -193,15 +252,18 @@ def render_analysis_section(attr_data, total_data, days_per_week, days_per_month
         month_total = pd.merge(month_total, days_per_month, on="年月_str")
         month_total["平均客数"] = (month_total["客数"] / month_total["営業日数"]).round(1)
 
-    fig_month = create_selectable_dual_line_chart(month_attr, month_total, "年月_str", f"{rate_label} 月別 1日あたり平均客数推移 {title_suffix}", "年月 (YYYY/MM)", selected_metrics, is_avg=True)
-    st.plotly_chart(fig_month, use_container_width=True)
+    fig_month = create_selectable_dual_line_chart(month_attr, month_total, "年月_str", "年月 (YYYY/MM)", selected_metrics, is_avg=True)
+    st.plotly_chart(fig_month, use_container_width=True, key=f"{key_prefix}_fig_month")
 
     # 月毎 最高値・最低値
+    title_3_sub = f"月別 各客層の最高値・最低値推移 {title_suffix}"
+    st.markdown(f'<div class="graph-sub-title">{title_3_sub}</div>', unsafe_allow_html=True)
+    
     day_attr_month_raw = attr_data.groupby(["日付_str", "年月_str", "客層"])["客数"].sum().reset_index()
     month_minmax = day_attr_month_raw.groupby(["年月_str", "客層"])["客数"].agg(最高値='max', 最低値='min').reset_index()
 
-    fig_month_minmax = create_selectable_min_max_chart(month_minmax, "年月_str", f"{rate_label} 月別 各客層の最高値・最低値推移 {title_suffix}", "年月 (YYYY/MM)", selected_metrics)
-    st.plotly_chart(fig_month_minmax, use_container_width=True)
+    fig_month_minmax = create_selectable_min_max_chart(month_minmax, "年月_str", "年月 (YYYY/MM)", selected_metrics)
+    st.plotly_chart(fig_month_minmax, use_container_width=True, key=f"{key_prefix}_fig_month_minmax")
 
 try:
     df = load_data(SPREADSHEET_CSV_URL)
@@ -236,7 +298,6 @@ try:
     st.sidebar.markdown("---")
     st.sidebar.header("🎉 イベント・特記事項フィルター")
     
-    # イベント・特記事項1・特記事項2の3列から「なし」や空欄を除外したユニークな値リストを取得
     event_cols = [c for c in ["イベント", "特記事項1", "特記事項2"] if c in filtered_df.columns]
     
     unique_events = set()
@@ -255,7 +316,6 @@ try:
         help="選択した項目が『イベント』『特記事項1』『特記事項2』のいずれかに含まれる日を抽出します。"
     )
     
-    # イベント・特記事項によるフィルタリング（選択がある場合）
     if selected_events and event_cols:
         cond = pd.Series(False, index=filtered_df.index)
         for c in event_cols:
@@ -311,15 +371,28 @@ try:
                 
                 # 【左カラム】20S全体の客層属性分析
                 with col_left:
-                    st.subheader("👥 20S 全体 客層属性分析")
+                    st.markdown("""
+                    <div class="column-header">
+                        <h3>👥 20S 全体 客層属性分析</h3>
+                    </div>
+                    """, unsafe_allow_html=True)
+                    
                     attr_data = target_df[~target_df["客層"].str.contains("総客", na=False)].copy()
                     total_data = target_df[target_df["客層"].str.contains("総客", na=False)].copy()
-                    render_analysis_section(attr_data, total_data, days_per_week, days_per_month, rate, selected_metrics, title_suffix="(全体)")
+                    render_analysis_section(
+                        attr_data, total_data, days_per_week, days_per_month,
+                        rate, selected_metrics, title_suffix="(全体)", key_prefix="20s_left"
+                    )
 
                 # 【右カラム】選択されたタイプのみに絞り込んだ客層属性分析
                 with col_right:
                     type_str = "・".join(selected_types) if selected_types else "未選択"
-                    st.subheader(f"🎰 タイプ限定 客層属性分析（{type_str}）")
+                    
+                    st.markdown(f"""
+                    <div class="column-header">
+                        <h3>🎰 タイプ限定 客層属性分析<br><span style="font-size:0.85rem; color:#555;">({type_str})</span></h3>
+                    </div>
+                    """, unsafe_allow_html=True)
                     
                     if not selected_types:
                         st.info("サイドバーで対象のタイプ（ジャグラー・AT・ノーマル系）を選択してください。")
@@ -337,13 +410,16 @@ try:
                             
                             render_analysis_section(
                                 type_attr_data, type_total_data, days_per_week, days_per_month,
-                                rate, selected_metrics, title_suffix=f"({type_str}限定)"
+                                rate, selected_metrics, title_suffix=f"({type_str}限定)", key_prefix="20s_right"
                             )
             else:
                 # OFF時（または5Sタブ）は従来のフルサイズ1カラム表示
                 attr_data = target_df[~target_df["客層"].str.contains("総客", na=False)].copy()
                 total_data = target_df[target_df["客層"].str.contains("総客", na=False)].copy()
-                render_analysis_section(attr_data, total_data, days_per_week, days_per_month, rate, selected_metrics)
+                render_analysis_section(
+                    attr_data, total_data, days_per_week, days_per_month,
+                    rate, selected_metrics, key_prefix=f"{rate.lower()}_single"
+                )
 
     # --- 4. 元データ一覧 ---
     st.subheader("📋 観測データ一覧")
